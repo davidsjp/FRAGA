@@ -1,0 +1,41 @@
+@FRAGA_HostAddress = http://localhost:5212
+
+GET {{FRAGA_HostAddress}}/api/fraga/health
+Accept: application/json
+
+###
+
+GET {{FRAGA_HostAddress}}/api/fraga/frete/regras/86010000
+Accept: application/json
+
+###
+
+POST {{FRAGA_HostAddress}}/api/fraga/frete/cotar
+Content-Type: application/json
+
+{
+  "cepDestino": "86010000",
+  "cepOrigem": "71205060",
+  "pesoKg": 120.5,
+  "valorNota": 1500,
+  "volumeM3": 0.25,
+  "quantidadeVolumes": 3,
+  "fatorCubagem": 300
+}
+
+###
+
+POST {{FRAGA_HostAddress}}/api/fraga/frete/cotar
+Content-Type: application/json
+
+{
+  "cepDestino": "70040903",
+  "cepOrigem": "71205060",
+  "pesoKg": 120.5,
+  "valorNota": 1500,
+  "volumeM3": 0.25,
+  "quantidadeVolumes": 3,
+  "fatorCubagem": 300
+}
+
+###
