@@ -109,6 +109,30 @@ public class FreteService
                 TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 AS ""PrecoCorrigido"",
                 TO_DECIMAL(IFNULL(PRECO.""frete_minimo"", 0), 19, 4) / 100 AS ""FreteMinimoCorrigido"",
                 COALESCE(NULLIF(PESO.""observacao_tabela"", ''), NULLIF(PRECO.""observações"", ''), '') AS ""ObservacaoPrazo"",
+                (
+                    SELECT MIN(P.""prazo_dias"")
+                    FROM ""SBO_ELETROPAR_PRD"".""FRETE_ELETROPAR_PRAZO"" P
+                    WHERE IFNULL(P.""ativo"", 'Y') = 'Y'
+                      AND (NULLIF(TRIM(TO_NVARCHAR(P.""cod_transportadora"")), '') IS NULL
+                           OR LPAD(TRIM(TO_NVARCHAR(P.""cod_transportadora"")), 6, '0') = LPAD(TRIM(TO_NVARCHAR(PESO.""cod_transportadora"")), 6, '0'))
+                      AND (NULLIF(TRIM(TO_NVARCHAR(P.""cnpj"")), '') IS NULL
+                           OR REPLACE(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cnpj""), '.', ''), '/', ''), '-', ''), ' ', '')
+                            = REPLACE(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(TRANS.""cnpj""), '.', ''), '/', ''), '-', ''), ' ', ''))
+                      AND (
+                          NULLIF(TRIM(TO_NVARCHAR(P.""cep_inicial"")), '') IS NULL
+                          OR NULLIF(TRIM(TO_NVARCHAR(P.""cep_final"")), '') IS NULL
+                          OR TO_BIGINT(?) BETWEEN
+                             LEAST(
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                             )
+                             AND
+                             GREATEST(
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                             )
+                      )
+                ) AS ""PrazoDiasTabela"",
                 CASE
                     WHEN LENGTH(TRIM(TO_NVARCHAR(PRECO.""validade""))) = 7
                         THEN ADD_DAYS(
@@ -158,6 +182,7 @@ public class FreteService
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
+        command.Parameters.Add(new HanaParameter { Value = cepConsultado });
 
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.CloseConnection, cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -176,7 +201,7 @@ public class FreteService
                 PrecoCorrigido = Round(GetDecimal(reader, "PrecoCorrigido")),
                 FreteMinimoCorrigido = Round(GetDecimal(reader, "FreteMinimoCorrigido")),
                 Validade = GetDateOnly(reader, "Validade"),
-                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo")),
+                PrazoDias = GetIntNullable(reader, "PrazoDiasTabela") ?? ParsePrazoDias(GetString(reader, "ObservacaoPrazo")),
                 StatusRegra = GetString(reader, "StatusRegra"),
                 TipoRegra = GetString(reader, "TipoRegra")
             });
@@ -213,6 +238,30 @@ public class FreteService
                 TO_DECIMAL(IFNULL(PRECO.""frete_minimo"", 0), 19, 4) / 100 AS ""FreteMinimoCorrigido"",
                 TO_DECIMAL(IFNULL(PRECO.""perc_sobre_total_nf"", 0), 19, 4) AS ""PercentualSobreTotalNF"",
                 TO_DECIMAL(IFNULL(PRECO.""outra_taxa_5_perc_nf"", 0), 19, 4) AS ""OutraTaxaPercentualNF"",
+                (
+                    SELECT MIN(P.""prazo_dias"")
+                    FROM ""SBO_ELETROPAR_PRD"".""FRETE_ELETROPAR_PRAZO"" P
+                    WHERE IFNULL(P.""ativo"", 'Y') = 'Y'
+                      AND (NULLIF(TRIM(TO_NVARCHAR(P.""cod_transportadora"")), '') IS NULL
+                           OR LPAD(TRIM(TO_NVARCHAR(P.""cod_transportadora"")), 6, '0') = LPAD(TRIM(TO_NVARCHAR(PESO.""cod_transportadora"")), 6, '0'))
+                      AND (NULLIF(TRIM(TO_NVARCHAR(P.""cnpj"")), '') IS NULL
+                           OR REPLACE(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cnpj""), '.', ''), '/', ''), '-', ''), ' ', '')
+                            = REPLACE(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(TRANS.""cnpj""), '.', ''), '/', ''), '-', ''), ' ', ''))
+                      AND (
+                          NULLIF(TRIM(TO_NVARCHAR(P.""cep_inicial"")), '') IS NULL
+                          OR NULLIF(TRIM(TO_NVARCHAR(P.""cep_final"")), '') IS NULL
+                          OR TO_BIGINT(?) BETWEEN
+                             LEAST(
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                             )
+                             AND
+                             GREATEST(
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                             )
+                      )
+                ) AS ""PrazoDiasTabela"",
                 COALESCE(NULLIF(PESO.""observacao_tabela"", ''), NULLIF(PRECO.""observações"", ''), '') AS ""ObservacaoPrazo"",
                 CASE
                     WHEN LENGTH(TRIM(TO_NVARCHAR(PRECO.""validade""))) = 7
@@ -254,6 +303,7 @@ public class FreteService
               AND TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 >= 1
             ORDER BY ""CodTransportadora"", ""KgMaximo"", ""ValorMaximoNF""";
         command.Parameters.Add(new HanaParameter { Value = cepDestino });
+        command.Parameters.Add(new HanaParameter { Value = cepDestino });
 
         var regras = new List<FreteRegra>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.CloseConnection, cancellationToken);
@@ -275,7 +325,7 @@ public class FreteService
                 PercentualSobreTotalNf = GetDecimal(reader, "PercentualSobreTotalNF"),
                 OutraTaxaPercentualNf = GetDecimal(reader, "OutraTaxaPercentualNF"),
                 Validade = GetDate(reader, "Validade"),
-                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo"))
+                PrazoDias = GetIntNullable(reader, "PrazoDiasTabela") ?? ParsePrazoDias(GetString(reader, "ObservacaoPrazo"))
             });
         }
 
@@ -383,6 +433,12 @@ public class FreteService
     {
         var value = reader[columnName];
         return value == null || Convert.IsDBNull(value) ? 0 : Convert.ToDecimal(value);
+    }
+
+    private static int? GetIntNullable(IDataRecord reader, string columnName)
+    {
+        var value = reader[columnName];
+        return value == null || Convert.IsDBNull(value) ? null : Convert.ToInt32(value);
     }
 
     private static DateTime? GetDate(IDataRecord reader, string columnName)
