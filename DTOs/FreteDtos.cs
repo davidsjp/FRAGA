@@ -50,6 +50,7 @@ public class FreteOpcaoDto
     public decimal PesoMaximoKg { get; set; }
     public decimal ValorMaximoNota { get; set; }
     public DateTime? Validade { get; set; }
+    public int? PrazoDias { get; set; }
 }
 
 public class FreteAlertaDto
@@ -79,6 +80,7 @@ public class FreteRegraItemDto
     public decimal PrecoCorrigido { get; set; }
     public decimal FreteMinimoCorrigido { get; set; }
     public DateOnly? Validade { get; set; }
+    public int? PrazoDias { get; set; }
     public string StatusRegra { get; set; } = string.Empty;
     public string TipoRegra { get; set; } = string.Empty;
 }

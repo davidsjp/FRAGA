@@ -16,4 +16,5 @@ internal class FreteRegra
     public decimal PercentualSobreTotalNf { get; set; }
     public decimal OutraTaxaPercentualNf { get; set; }
     public DateTime? Validade { get; set; }
+    public int? PrazoDias { get; set; }
 }

@@ -59,7 +59,8 @@ public class FreteService
                 x.PrecoCorrigido,
                 x.FreteMinimoCorrigido,
                 x.PercentualSobreTotalNf,
-                x.OutraTaxaPercentualNf))
+                x.OutraTaxaPercentualNf,
+                x.PrazoDias))
             .Select(x => x.First())
             .Select(x => MontarOpcao(x, entrada))
             .OrderBy(x => x.ValorFrete)
@@ -107,6 +108,7 @@ public class FreteService
                 PESO.""cod_tabela_preco"" AS ""CodTabelaPreco"",
                 TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 AS ""PrecoCorrigido"",
                 TO_DECIMAL(IFNULL(PRECO.""frete_minimo"", 0), 19, 4) / 100 AS ""FreteMinimoCorrigido"",
+                COALESCE(NULLIF(PESO.""observacao_tabela"", ''), NULLIF(PRECO.""observações"", ''), '') AS ""ObservacaoPrazo"",
                 CASE
                     WHEN LENGTH(TRIM(TO_NVARCHAR(PRECO.""validade""))) = 7
                         THEN ADD_DAYS(
@@ -174,6 +176,7 @@ public class FreteService
                 PrecoCorrigido = Round(GetDecimal(reader, "PrecoCorrigido")),
                 FreteMinimoCorrigido = Round(GetDecimal(reader, "FreteMinimoCorrigido")),
                 Validade = GetDateOnly(reader, "Validade"),
+                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo")),
                 StatusRegra = GetString(reader, "StatusRegra"),
                 TipoRegra = GetString(reader, "TipoRegra")
             });
@@ -210,6 +213,7 @@ public class FreteService
                 TO_DECIMAL(IFNULL(PRECO.""frete_minimo"", 0), 19, 4) / 100 AS ""FreteMinimoCorrigido"",
                 TO_DECIMAL(IFNULL(PRECO.""perc_sobre_total_nf"", 0), 19, 4) AS ""PercentualSobreTotalNF"",
                 TO_DECIMAL(IFNULL(PRECO.""outra_taxa_5_perc_nf"", 0), 19, 4) AS ""OutraTaxaPercentualNF"",
+                COALESCE(NULLIF(PESO.""observacao_tabela"", ''), NULLIF(PRECO.""observações"", ''), '') AS ""ObservacaoPrazo"",
                 CASE
                     WHEN LENGTH(TRIM(TO_NVARCHAR(PRECO.""validade""))) = 7
                         THEN ADD_DAYS(
@@ -270,7 +274,8 @@ public class FreteService
                 FreteMinimoCorrigido = GetDecimal(reader, "FreteMinimoCorrigido"),
                 PercentualSobreTotalNf = GetDecimal(reader, "PercentualSobreTotalNF"),
                 OutraTaxaPercentualNf = GetDecimal(reader, "OutraTaxaPercentualNF"),
-                Validade = GetDate(reader, "Validade")
+                Validade = GetDate(reader, "Validade"),
+                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo"))
             });
         }
 
@@ -308,7 +313,8 @@ public class FreteService
             PercentualOutrasTaxas = Round(regra.OutraTaxaPercentualNf, 4),
             PesoMaximoKg = Round(regra.KgMaximo),
             ValorMaximoNota = Round(regra.ValorMaximoNf),
-            Validade = regra.Validade
+            Validade = regra.Validade,
+            PrazoDias = regra.PrazoDias
         };
     }
 
@@ -392,6 +398,33 @@ public class FreteService
     {
         var date = GetDate(reader, columnName);
         return date.HasValue ? DateOnly.FromDateTime(date.Value) : null;
+    }
+
+    private static int? ParsePrazoDias(string observacao)
+    {
+        if (string.IsNullOrWhiteSpace(observacao))
+            return null;
+
+        var dPlusMatch = Regex.Match(observacao, @"D\s*\+\s*(\d+)", RegexOptions.IgnoreCase);
+        if (dPlusMatch.Success && int.TryParse(dPlusMatch.Groups[1].Value, out var dPlusDays))
+            return dPlusDays;
+
+        var hourMatches = Regex.Matches(observacao, @"\d+(?=\s*(?:H|HR|HRS|HORA|HORAS)\b)", RegexOptions.IgnoreCase);
+        if (hourMatches.Count > 0)
+        {
+            var maxHours = hourMatches
+                .Select(x => int.TryParse(x.Value, out var hours) ? hours : 0)
+                .Max();
+
+            if (maxHours > 0)
+                return (int)Math.Ceiling(maxHours / 24m);
+        }
+
+        var dayMatch = Regex.Match(observacao, @"(\d+)\s*(?:DIA|DIAS)\b", RegexOptions.IgnoreCase);
+        if (dayMatch.Success && int.TryParse(dayMatch.Groups[1].Value, out var days))
+            return days;
+
+        return null;
     }
 
     private static decimal Round(decimal value, int places = 2)
