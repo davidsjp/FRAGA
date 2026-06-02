@@ -151,6 +151,7 @@ public class FreteService
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_inicial""), '-', ''), '.', ''), ' ', ''), '')),
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_final""), '-', ''), '.', ''), ' ', ''), ''))
                 )
+              AND TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 >= 1
             ORDER BY ""CodTransportadora"", ""KgMaximo"", ""ValorMaximoNF"", ""CodTabelaPreco""";
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
@@ -246,6 +247,7 @@ public class FreteService
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_inicial""), '-', ''), '.', ''), ' ', ''), '')),
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_final""), '-', ''), '.', ''), ' ', ''), ''))
                 )
+              AND TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 >= 1
             ORDER BY ""CodTransportadora"", ""KgMaximo"", ""ValorMaximoNF""";
         command.Parameters.Add(new HanaParameter { Value = cepDestino });
 
