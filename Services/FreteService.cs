@@ -50,13 +50,14 @@ public class FreteService
 
         if (regras.Count == 0)
         {
+            var alerta = string.IsNullOrWhiteSpace(entrada.CepOrigem)
+                ? new FreteAlertaDto { Codigo = "SEM_REGRA_CEP", Mensagem = "Nao foi encontrada faixa de frete para o CEP destino." }
+                : new FreteAlertaDto { Codigo = "SEM_REGRA_ORIGEM_DESTINO", Mensagem = "Nao foi encontrada tabela de frete para a combinacao de CEP origem e destino." };
+
             return Falha(
                 "Nenhuma regra de frete encontrada para o CEP informado.",
                 entrada,
-                new List<FreteAlertaDto>
-                {
-                    new() { Codigo = "SEM_REGRA_CEP", Mensagem = "Nao foi encontrada faixa de frete para o CEP destino." }
-                });
+                new List<FreteAlertaDto> { alerta });
         }
 
         var regrasValidas = regras
@@ -123,6 +124,7 @@ public class FreteService
         command.CommandText = @"
             SELECT DISTINCT
                 ? AS ""Cep"",
+                PESO.""cep_origem"" AS ""CepOrigem"",
                 IFNULL(CEP.""uf"", '') AS ""UF"",
                 IFNULL(CEP.""cidade"", '') AS ""Cidade"",
                 PESO.""cod_transportadora"" AS ""CodTransportadora"",
@@ -155,17 +157,56 @@ public class FreteService
                               NULLIF(TRIM(TO_NVARCHAR(P.""cep_inicial"")), '') IS NOT NULL
                               AND NULLIF(TRIM(TO_NVARCHAR(P.""cep_final"")), '') IS NOT NULL
                               AND TO_BIGINT(?) BETWEEN
+                                 LEAST(
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 )
+                                 AND
+                                 GREATEST(
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 )
+                          )
+                          OR (
+                              NULLIF(TRIM(TO_NVARCHAR(P.""cep_inicial"")), '') IS NULL
+                              AND NULLIF(TRIM(TO_NVARCHAR(P.""cep_final"")), '') IS NULL
+                              AND (NULLIF(TRIM(TO_NVARCHAR(P.""uf"")), '') IS NULL OR UPPER(TRIM(TO_NVARCHAR(P.""uf""))) = UPPER(TRIM(TO_NVARCHAR(CEP.""uf""))))
+                              AND (NULLIF(TRIM(TO_NVARCHAR(P.""cidade"")), '') IS NULL OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(P.""cidade""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C') = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(CEP.""cidade""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C'))
+                          )
+                      )
+                      AND (
+                          NULLIF(TRIM(TO_NVARCHAR(P.""cep_origem_inicial"")), '') IS NULL
+                          OR NULLIF(TRIM(TO_NVARCHAR(P.""cep_origem_final"")), '') IS NULL
+                          OR TO_BIGINT(NULLIF(?, '')) BETWEEN
                              LEAST(
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_final""), '-', ''), '.', ''), ' ', ''), ''))
                              )
                              AND
                              GREATEST(
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_final""), '-', ''), '.', ''), ' ', ''), ''))
                              )
                       )
                 ) AS ""PrazoDiasTabela"",
+                (
+                    SELECT MIN(NULLIF(CITIES.""deadline"", 0))
+                    FROM ""SBO_ELETROPAR_PRD"".""ArkabWebAPIFreightRegionCities"" CITIES
+                    WHERE UPPER(TRIM(TO_NVARCHAR(CITIES.""state""))) = UPPER(TRIM(TO_NVARCHAR(CEP.""uf"")))
+                      AND (
+                          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(CITIES.""cityname""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C')
+                          =
+                          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(CEP.""cidade""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C')
+                      )
+                      AND (
+                          NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_ini""), '-', ''), '.', ''), ' ', ''), '') IS NULL
+                          OR NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_fim""), '-', ''), '.', ''), ' ', ''), '') IS NULL
+                          OR TO_BIGINT(?) BETWEEN
+                              LEAST(TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_ini""), '-', ''), '.', ''), ' ', ''), '')), TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_fim""), '-', ''), '.', ''), ' ', ''), '')))
+                              AND
+                              GREATEST(TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_ini""), '-', ''), '.', ''), ' ', ''), '')), TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_fim""), '-', ''), '.', ''), ' ', ''), '')))
+                      )
+                ) AS ""PrazoDiasArkab"",
                 CASE
                     WHEN LENGTH(TRIM(TO_NVARCHAR(PRECO.""validade""))) = 7
                         THEN ADD_DAYS(
@@ -214,6 +255,8 @@ public class FreteService
             ORDER BY ""CodTransportadora"", ""KgMaximo"", ""ValorMaximoNF"", ""CodTabelaPreco""";
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
+        command.Parameters.Add(new HanaParameter { Value = string.Empty });
+        command.Parameters.Add(new HanaParameter { Value = cepConsultado });
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
         command.Parameters.Add(new HanaParameter { Value = cepConsultado });
 
@@ -223,6 +266,7 @@ public class FreteService
             itens.Add(new FreteRegraItemDto
             {
                 Cep = GetString(reader, "Cep"),
+                CepOrigem = GetString(reader, "CepOrigem"),
                 Uf = GetString(reader, "UF"),
                 Cidade = GetString(reader, "Cidade"),
                 CodTransportadora = GetString(reader, "CodTransportadora"),
@@ -234,7 +278,9 @@ public class FreteService
                 PrecoCorrigido = Round(GetDecimal(reader, "PrecoCorrigido")),
                 FreteMinimoCorrigido = Round(GetDecimal(reader, "FreteMinimoCorrigido")),
                 Validade = GetDateOnly(reader, "Validade"),
-                PrazoDias = GetIntNullable(reader, "PrazoDiasTabela") ?? ParsePrazoDias(GetString(reader, "ObservacaoPrazo")),
+                PrazoDias = GetIntNullable(reader, "PrazoDiasTabela")
+                    ?? ParsePrazoDias(GetString(reader, "ObservacaoPrazo"))
+                    ?? GetIntNullable(reader, "PrazoDiasArkab"),
                 StatusRegra = GetString(reader, "StatusRegra"),
                 TipoRegra = GetString(reader, "TipoRegra")
             });
@@ -265,14 +311,27 @@ public class FreteService
                 IFNULL(BP.""NomeTransportadora"", '') AS ""NomeTransportadora"",
                 IFNULL(TRANS.""cnpj"", '') AS ""CnpjTransportadora"",
                 PESO.""cod_tabela_preco"" AS ""CodTabelaPreco"",
+                IFNULL(CEP.""uf"", '') AS ""UF"",
+                IFNULL(CEP.""cidade"", '') AS ""Cidade"",
                 TO_DECIMAL(IFNULL(PESO.""kg_maximo"", 0), 19, 4) AS ""KgMaximo"",
                 TO_DECIMAL(IFNULL(PESO.""valor_maximo_nf"", 0), 19, 4) AS ""ValorMaximoNF"",
                 TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 AS ""PrecoCorrigido"",
                 TO_DECIMAL(IFNULL(PRECO.""frete_minimo"", 0), 19, 4) / 100 AS ""FreteMinimoCorrigido"",
+                TO_DECIMAL(IFNULL(PRECO.""adicional_por_kg"", 0), 19, 4) / 100 AS ""AdicionalPorKg"",
+                TO_DECIMAL(IFNULL(PRECO.""fracao_kg"", 0), 19, 4) AS ""FracaoKg"",
                 TO_DECIMAL(IFNULL(PRECO.""perc_sobre_total_nf"", 0), 19, 4) AS ""PercentualSobreTotalNF"",
                 TO_DECIMAL(IFNULL(PRECO.""outra_taxa_5_perc_nf"", 0), 19, 4) AS ""OutraTaxaPercentualNF"",
+                IFNULL(PRECO.""aplica_fracao_kg"", 'N') AS ""AplicaFracaoKg"",
+                IFNULL(PRECO.""despreza_kg_fracao_kg"", 'N') AS ""DesprezaKgFracaoKg"",
                 (
-                    SELECT MIN(P.""prazo_dias"")
+                    SELECT COALESCE(
+                        MIN(CASE
+                            WHEN NULLIF(TRIM(TO_NVARCHAR(P.""cod_transportadora"")), '') IS NOT NULL
+                              OR NULLIF(TRIM(TO_NVARCHAR(P.""cnpj"")), '') IS NOT NULL
+                            THEN P.""prazo_dias""
+                        END),
+                        MIN(P.""prazo_dias"")
+                    )
                     FROM ""SBO_ELETROPAR_PRD"".""FRETE_ELETROPAR_PRAZO"" P
                     WHERE IFNULL(P.""ativo"", 'Y') = 'Y'
                       AND (NULLIF(TRIM(TO_NVARCHAR(P.""cod_transportadora"")), '') IS NULL
@@ -285,17 +344,56 @@ public class FreteService
                               NULLIF(TRIM(TO_NVARCHAR(P.""cep_inicial"")), '') IS NOT NULL
                               AND NULLIF(TRIM(TO_NVARCHAR(P.""cep_final"")), '') IS NOT NULL
                               AND TO_BIGINT(?) BETWEEN
+                                 LEAST(
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 )
+                                 AND
+                                 GREATEST(
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 )
+                          )
+                          OR (
+                              NULLIF(TRIM(TO_NVARCHAR(P.""cep_inicial"")), '') IS NULL
+                              AND NULLIF(TRIM(TO_NVARCHAR(P.""cep_final"")), '') IS NULL
+                              AND (NULLIF(TRIM(TO_NVARCHAR(P.""uf"")), '') IS NULL OR UPPER(TRIM(TO_NVARCHAR(P.""uf""))) = UPPER(TRIM(TO_NVARCHAR(CEP.""uf""))))
+                              AND (NULLIF(TRIM(TO_NVARCHAR(P.""cidade"")), '') IS NULL OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(P.""cidade""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C') = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(CEP.""cidade""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C'))
+                          )
+                      )
+                      AND (
+                          NULLIF(TRIM(TO_NVARCHAR(P.""cep_origem_inicial"")), '') IS NULL
+                          OR NULLIF(TRIM(TO_NVARCHAR(P.""cep_origem_final"")), '') IS NULL
+                          OR TO_BIGINT(NULLIF(?, '')) BETWEEN
                              LEAST(
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_final""), '-', ''), '.', ''), ' ', ''), ''))
                              )
                              AND
                              GREATEST(
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_inicial""), '-', ''), '.', ''), ' ', ''), '')),
-                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_final""), '-', ''), '.', ''), ' ', ''), ''))
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_inicial""), '-', ''), '.', ''), ' ', ''), '')),
+                                 TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(P.""cep_origem_final""), '-', ''), '.', ''), ' ', ''), ''))
                              )
                       )
                 ) AS ""PrazoDiasTabela"",
+                (
+                    SELECT MIN(NULLIF(CITIES.""deadline"", 0))
+                    FROM ""SBO_ELETROPAR_PRD"".""ArkabWebAPIFreightRegionCities"" CITIES
+                    WHERE UPPER(TRIM(TO_NVARCHAR(CITIES.""state""))) = UPPER(TRIM(TO_NVARCHAR(CEP.""uf"")))
+                      AND (
+                          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(CITIES.""cityname""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C')
+                          =
+                          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(TO_NVARCHAR(CEP.""cidade""))), 'Á', 'A'), 'À', 'A'), 'Â', 'A'), 'Ã', 'A'), 'É', 'E'), 'Ê', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ô', 'O'), 'Õ', 'O'), 'Ç', 'C')
+                      )
+                      AND (
+                          NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_ini""), '-', ''), '.', ''), ' ', ''), '') IS NULL
+                          OR NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_fim""), '-', ''), '.', ''), ' ', ''), '') IS NULL
+                          OR TO_BIGINT(?) BETWEEN
+                              LEAST(TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_ini""), '-', ''), '.', ''), ' ', ''), '')), TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_fim""), '-', ''), '.', ''), ' ', ''), '')))
+                              AND
+                              GREATEST(TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_ini""), '-', ''), '.', ''), ' ', ''), '')), TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CITIES.""cep_fim""), '-', ''), '.', ''), ' ', ''), '')))
+                      )
+                ) AS ""PrazoDiasArkab"",
                 COALESCE(NULLIF(PESO.""observacao_tabela"", ''), NULLIF(PRECO.""observações"", ''), '') AS ""ObservacaoPrazo"",
                 CASE
                     WHEN LENGTH(TRIM(TO_NVARCHAR(PRECO.""validade""))) = 7
@@ -313,6 +411,8 @@ public class FreteService
                 ON LPAD(TRIM(TO_NVARCHAR(PRECO.""cod_transportadora"")), 6, '0')
                  = LPAD(TRIM(TO_NVARCHAR(PESO.""cod_transportadora"")), 6, '0')
                AND PRECO.""numero_da_tabela"" = PESO.""cod_tabela_preco""
+            LEFT JOIN ""SBO_ELETROPAR_PRD"".""FRETE_ELETROPAR_CEP"" CEP
+                ON REPLACE(REPLACE(REPLACE(TO_NVARCHAR(CEP.""cep""), '-', ''), '.', ''), ' ', '') = ?
             LEFT JOIN (
                 SELECT
                     REPLACE(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(D.""TaxId0""), '.', ''), '/', ''), '-', ''), ' ', '') AS ""CnpjNormalizado"",
@@ -324,12 +424,7 @@ public class FreteService
                 GROUP BY REPLACE(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(D.""TaxId0""), '.', ''), '/', ''), '-', ''), ' ', '')
             ) BP
                 ON BP.""CnpjNormalizado"" = REPLACE(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(TRANS.""cnpj""), '.', ''), '/', ''), '-', ''), ' ', '')
-            WHERE (
-                ? = 'N'
-                OR NULLIF(?, '') IS NULL
-                OR TO_BIGINT(?) = TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_origem""), '-', ''), '.', ''), ' ', ''), ''))
-              )
-              AND TO_BIGINT(?) BETWEEN
+            WHERE TO_BIGINT(?) BETWEEN
                 LEAST(
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_inicial""), '-', ''), '.', ''), ' ', ''), '')),
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_final""), '-', ''), '.', ''), ' ', ''), ''))
@@ -339,8 +434,11 @@ public class FreteService
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_inicial""), '-', ''), '.', ''), ' ', ''), '')),
                     TO_BIGINT(NULLIF(REPLACE(REPLACE(REPLACE(TO_NVARCHAR(PESO.""cep_destino_final""), '-', ''), '.', ''), ' ', ''), ''))
                 )
-              AND TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 >= 1
+              AND TO_DECIMAL(IFNULL(PRECO.""preco"", 0), 19, 4) / 100 >= 5
             ORDER BY ""CodTransportadora"", ""KgMaximo"", ""ValorMaximoNF""";
+        command.Parameters.Add(new HanaParameter { Value = cepDestino });
+        command.Parameters.Add(new HanaParameter { Value = cepOrigem });
+        command.Parameters.Add(new HanaParameter { Value = cepDestino });
         command.Parameters.Add(new HanaParameter { Value = cepDestino });
         command.Parameters.Add(new HanaParameter { Value = cepDestino });
 
@@ -361,12 +459,21 @@ public class FreteService
                 ValorMaximoNf = GetDecimal(reader, "ValorMaximoNF"),
                 PrecoCorrigido = GetDecimal(reader, "PrecoCorrigido"),
                 FreteMinimoCorrigido = GetDecimal(reader, "FreteMinimoCorrigido"),
+                AdicionalPorKg = GetDecimal(reader, "AdicionalPorKg"),
+                FracaoKg = GetDecimal(reader, "FracaoKg"),
                 PercentualSobreTotalNf = GetDecimal(reader, "PercentualSobreTotalNF"),
                 OutraTaxaPercentualNf = GetDecimal(reader, "OutraTaxaPercentualNF"),
+                AplicaFracaoKg = GetBoolFlag(reader, "AplicaFracaoKg"),
+                DesprezaKgFracaoKg = GetBoolFlag(reader, "DesprezaKgFracaoKg"),
                 Validade = GetDate(reader, "Validade"),
-                PrazoDias = GetIntNullable(reader, "PrazoDiasTabela") ?? ParsePrazoDias(GetString(reader, "ObservacaoPrazo"))
+                PrazoDias = GetIntNullable(reader, "PrazoDiasTabela")
+                    ?? ParsePrazoDias(GetString(reader, "ObservacaoPrazo"))
+                    ?? GetIntNullable(reader, "PrazoDiasArkab")
             });
         }
+
+        if (exigirOrigem && !string.IsNullOrWhiteSpace(cepOrigem))
+            regras = regras.Where(x => OrigemCompativel(cepOrigem, x.CepOrigem)).ToList();
 
         return regras;
     }
@@ -385,8 +492,12 @@ public class FreteService
     private static FreteOpcaoDto MontarOpcao(FreteRegra regra, FreteEntradaDto entrada)
     {
         var baseFrete = Math.Max(regra.PrecoCorrigido + CalcularAdicionalPeso(regra, entrada.PesoConsideradoKg), regra.FreteMinimoCorrigido);
-        var valorAdValorem = entrada.ValorNota * regra.PercentualSobreTotalNf / 100m;
-        var valorOutrasTaxas = entrada.ValorNota * regra.OutraTaxaPercentualNf / 100m;
+        var valorAdValorem = entrada.ValorBaseAdValorem * regra.PercentualSobreTotalNf / 100m;
+        var valorOutrasTaxas = entrada.ValorBaseAdValorem * regra.OutraTaxaPercentualNf / 100m;
+        var usaPercentualSobrePedido = regra.PercentualSobreTotalNf > 0 || regra.OutraTaxaPercentualNf > 0;
+        var valorFrete = usaPercentualSobrePedido
+            ? Math.Max(valorAdValorem + valorOutrasTaxas, regra.FreteMinimoCorrigido)
+            : baseFrete;
 
         return new FreteOpcaoDto
         {
@@ -394,7 +505,7 @@ public class FreteService
             NomeTransportadora = regra.NomeTransportadora,
             CnpjTransportadora = regra.CnpjTransportadora,
             CodigoTabelaPreco = regra.CodigoTabelaPreco,
-            ValorFrete = Round(baseFrete + valorAdValorem + valorOutrasTaxas),
+            ValorFrete = Round(valorFrete),
             FreteMinimo = Round(regra.FreteMinimoCorrigido),
             ValorAdValorem = Round(valorAdValorem),
             PercentualAdValorem = Round(regra.PercentualSobreTotalNf, 4),
@@ -409,9 +520,12 @@ public class FreteService
 
     private static FreteEntradaDto CriarEntrada(FreteCotacaoRequest request)
     {
-        var fatorCubagem = request.FatorCubagem <= 0 ? 300m : request.FatorCubagem;
-        var pesoCubado = request.VolumeM3 * fatorCubagem;
-        var pesoConsiderado = Math.Max(request.PesoKg, pesoCubado);
+        var fatorCubagem = request.FatorCubagem <= 0 ? 1m : request.FatorCubagem;
+        var pesoCubado = 0m;
+        var pesoConsiderado = request.PesoKg;
+        var valorBaseAdValorem = request.SubtotalLiquido
+            ?? request.ValorBaseAdValorem
+            ?? request.ValorNota;
 
         return new FreteEntradaDto
         {
@@ -423,6 +537,7 @@ public class FreteService
             PesoCubadoKg = Round(pesoCubado),
             PesoConsideradoKg = Round(pesoConsiderado),
             ValorNota = Round(request.ValorNota),
+            ValorBaseAdValorem = Round(valorBaseAdValorem),
             QuantidadeVolumes = request.QuantidadeVolumes <= 0 ? 1 : request.QuantidadeVolumes
         };
     }
@@ -437,11 +552,14 @@ public class FreteService
         if (entrada.CepDestino.Length is > 0 and < 8)
             alertas.Add(new FreteAlertaDto { Codigo = "CEP_DESTINO_INVALIDO", Mensagem = "CEP destino deve conter 8 digitos." });
 
-        if (entrada.PesoKg <= 0 && entrada.VolumeM3 <= 0)
-            alertas.Add(new FreteAlertaDto { Codigo = "PESO_OU_VOLUME_OBRIGATORIO", Mensagem = "Informe peso ou volume para calcular o frete." });
+        if (entrada.PesoKg <= 0)
+            alertas.Add(new FreteAlertaDto { Codigo = "PESO_OBRIGATORIO", Mensagem = "Informe peso para calcular o frete." });
 
         if (entrada.ValorNota < 0)
             alertas.Add(new FreteAlertaDto { Codigo = "VALOR_NOTA_INVALIDO", Mensagem = "Valor da nota nao pode ser negativo." });
+
+        if (entrada.ValorBaseAdValorem < 0)
+            alertas.Add(new FreteAlertaDto { Codigo = "VALOR_BASE_AD_VALOREM_INVALIDO", Mensagem = "Valor base do ad valorem nao pode ser negativo." });
 
         return alertas;
     }
@@ -460,6 +578,64 @@ public class FreteService
     private static string NormalizarCep(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? string.Empty : Regex.Replace(value, @"\D", string.Empty);
+    }
+
+    private static bool OrigemCompativel(string cepOrigemInformado, string cepOrigemRegra)
+    {
+        var origemInformada = NormalizarCep(cepOrigemInformado);
+        var origemRegra = NormalizarCep(cepOrigemRegra);
+        if (origemInformada.Length != 8 || origemRegra.Length != 8)
+            return false;
+
+        if (origemInformada == origemRegra)
+            return true;
+
+        var ufInformada = ObterUfPorCep(origemInformada);
+        var ufRegra = ObterUfPorCep(origemRegra);
+
+        return !string.IsNullOrWhiteSpace(ufInformada)
+            && string.Equals(ufInformada, ufRegra, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ObterUfPorCep(string cep)
+    {
+        if (!int.TryParse(cep[..5], out var prefixo))
+            return string.Empty;
+
+        return prefixo switch
+        {
+            >= 01000 and <= 19999 => "SP",
+            >= 20000 and <= 28999 => "RJ",
+            >= 29000 and <= 29999 => "ES",
+            >= 30000 and <= 39999 => "MG",
+            >= 40000 and <= 48999 => "BA",
+            >= 49000 and <= 49999 => "SE",
+            >= 50000 and <= 56999 => "PE",
+            >= 57000 and <= 57999 => "AL",
+            >= 58000 and <= 58999 => "PB",
+            >= 59000 and <= 59999 => "RN",
+            >= 60000 and <= 63999 => "CE",
+            >= 64000 and <= 64999 => "PI",
+            >= 65000 and <= 65999 => "MA",
+            >= 66000 and <= 68899 => "PA",
+            >= 68900 and <= 68999 => "AP",
+            >= 69000 and <= 69299 => "AM",
+            >= 69300 and <= 69399 => "RR",
+            >= 69400 and <= 69899 => "AM",
+            >= 69900 and <= 69999 => "AC",
+            >= 70000 and <= 72799 => "DF",
+            >= 72800 and <= 72999 => "GO",
+            >= 73000 and <= 73699 => "DF",
+            >= 73700 and <= 76799 => "GO",
+            >= 76800 and <= 76999 => "RO",
+            >= 77000 and <= 77999 => "TO",
+            >= 78000 and <= 78899 => "MT",
+            >= 79000 and <= 79999 => "MS",
+            >= 80000 and <= 87999 => "PR",
+            >= 88000 and <= 89999 => "SC",
+            >= 90000 and <= 99999 => "RS",
+            _ => string.Empty
+        };
     }
 
     private static string GetString(IDataRecord reader, string columnName)
@@ -487,6 +663,31 @@ public class FreteService
             return null;
 
         return value is DateTime date ? date : Convert.ToDateTime(value);
+    }
+
+    private static bool GetBoolFlag(IDataRecord reader, string columnName)
+    {
+        var value = GetString(reader, columnName).Trim();
+        return value.Equals("Y", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("S", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("TRUE", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static decimal CalcularAdicionalPeso(FreteRegra regra, decimal pesoConsideradoKg)
+    {
+        if (!regra.AplicaFracaoKg || regra.AdicionalPorKg <= 0 || regra.FracaoKg <= 0)
+            return 0;
+
+        var pesoExcedente = Math.Max(0, pesoConsideradoKg - regra.KgMaximo);
+        if (pesoExcedente <= 0)
+            return 0;
+
+        var fracoes = regra.DesprezaKgFracaoKg
+            ? Math.Floor(pesoExcedente / regra.FracaoKg)
+            : Math.Ceiling(pesoExcedente / regra.FracaoKg);
+
+        return fracoes * regra.AdicionalPorKg;
     }
 
     private static DateOnly? GetDateOnly(IDataRecord reader, string columnName)

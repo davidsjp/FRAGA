@@ -13,8 +13,12 @@ internal class FreteRegra
     public decimal ValorMaximoNf { get; set; }
     public decimal PrecoCorrigido { get; set; }
     public decimal FreteMinimoCorrigido { get; set; }
+    public decimal AdicionalPorKg { get; set; }
+    public decimal FracaoKg { get; set; }
     public decimal PercentualSobreTotalNf { get; set; }
     public decimal OutraTaxaPercentualNf { get; set; }
+    public bool AplicaFracaoKg { get; set; }
+    public bool DesprezaKgFracaoKg { get; set; }
     public DateTime? Validade { get; set; }
     public int? PrazoDias { get; set; }
 }

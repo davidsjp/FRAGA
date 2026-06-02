@@ -6,19 +6,25 @@ CREATE TABLE "SBO_ELETROPAR_PRD"."FRETE_ELETROPAR_PRAZO" (
     "cnpj" VARCHAR(20),
     "uf" VARCHAR(2),
     "cidade" VARCHAR(100),
+    "cep_origem_inicial" VARCHAR(20),
+    "cep_origem_final" VARCHAR(20),
     "cep_inicial" VARCHAR(20),
     "cep_final" VARCHAR(20),
     "prazo_dias" INTEGER NOT NULL,
     "prioridade" INTEGER DEFAULT 100,
     "ativo" CHAR(1) DEFAULT 'Y',
-    "observacao" VARCHAR(255)
+    "observacao" VARCHAR(255),
+    "origem_arkab" VARCHAR(100),
+    "arkab_region_id" INTEGER,
+    "arkab_line" INTEGER,
+    "bairro" VARCHAR(100)
 );
 
 CREATE INDEX "IDX_FRETE_ELETROPAR_PRAZO_01"
-ON "SBO_ELETROPAR_PRD"."FRETE_ELETROPAR_PRAZO" ("ativo", "cod_transportadora", "cep_inicial", "cep_final");
+ON "SBO_ELETROPAR_PRD"."FRETE_ELETROPAR_PRAZO" ("ativo", "cod_transportadora", "cep_origem_inicial", "cep_origem_final", "cep_inicial", "cep_final");
 
 CREATE INDEX "IDX_FRETE_ELETROPAR_PRAZO_02"
-ON "SBO_ELETROPAR_PRD"."FRETE_ELETROPAR_PRAZO" ("ativo", "cnpj", "cep_inicial", "cep_final");
+ON "SBO_ELETROPAR_PRD"."FRETE_ELETROPAR_PRAZO" ("ativo", "cnpj", "cep_origem_inicial", "cep_origem_final", "cep_inicial", "cep_final");
 
 -- Exemplo para cadastrar prazo da BOMFIM em Fortaleza/CE.
 -- Ajuste o prazo_dias antes de executar.
@@ -27,6 +33,8 @@ ON "SBO_ELETROPAR_PRD"."FRETE_ELETROPAR_PRAZO" ("ativo", "cnpj", "cep_inicial", 
 --     "cnpj",
 --     "uf",
 --     "cidade",
+--     "cep_origem_inicial",
+--     "cep_origem_final",
 --     "cep_inicial",
 --     "cep_final",
 --     "prazo_dias",
@@ -38,6 +46,8 @@ ON "SBO_ELETROPAR_PRD"."FRETE_ELETROPAR_PRAZO" ("ativo", "cnpj", "cep_inicial", 
 --     '32808669001334',
 --     'CE',
 --     'FORTALEZA',
+--     '50770020',
+--     '50770020',
 --     '60800000',
 --     '60899999',
 --     <PRAZO_EM_DIAS>,

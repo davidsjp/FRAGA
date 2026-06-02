@@ -6,6 +6,8 @@ public class FreteCotacaoRequest
     public string? CepOrigem { get; set; }
     public decimal PesoKg { get; set; }
     public decimal ValorNota { get; set; }
+    public decimal? SubtotalLiquido { get; set; }
+    public decimal? ValorBaseAdValorem { get; set; }
     public decimal VolumeM3 { get; set; }
     public int QuantidadeVolumes { get; set; } = 1;
     public decimal FatorCubagem { get; set; } = 300m;
@@ -31,6 +33,7 @@ public class FreteEntradaDto
     public decimal PesoCubadoKg { get; set; }
     public decimal PesoConsideradoKg { get; set; }
     public decimal ValorNota { get; set; }
+    public decimal ValorBaseAdValorem { get; set; }
     public int QuantidadeVolumes { get; set; }
 }
 
@@ -69,6 +72,7 @@ public class FreteRegrasResponse
 public class FreteRegraItemDto
 {
     public string Cep { get; set; } = string.Empty;
+    public string CepOrigem { get; set; } = string.Empty;
     public string Uf { get; set; } = string.Empty;
     public string Cidade { get; set; } = string.Empty;
     public string CodTransportadora { get; set; } = string.Empty;
