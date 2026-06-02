@@ -176,7 +176,7 @@ public class FreteService
                 PrecoCorrigido = Round(GetDecimal(reader, "PrecoCorrigido")),
                 FreteMinimoCorrigido = Round(GetDecimal(reader, "FreteMinimoCorrigido")),
                 Validade = GetDateOnly(reader, "Validade"),
-                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo")),
+                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo")) ?? 1,
                 StatusRegra = GetString(reader, "StatusRegra"),
                 TipoRegra = GetString(reader, "TipoRegra")
             });
@@ -275,7 +275,7 @@ public class FreteService
                 PercentualSobreTotalNf = GetDecimal(reader, "PercentualSobreTotalNF"),
                 OutraTaxaPercentualNf = GetDecimal(reader, "OutraTaxaPercentualNF"),
                 Validade = GetDate(reader, "Validade"),
-                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo"))
+                PrazoDias = ParsePrazoDias(GetString(reader, "ObservacaoPrazo")) ?? 1
             });
         }
 
