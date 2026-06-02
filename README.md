@@ -33,9 +33,8 @@ POST /api/fraga/frete/cotar
   "cepOrigem": "71205060",
   "pesoKg": 120.5,
   "valorNota": 1500,
-  "volumeM3": 0.25,
-  "quantidadeVolumes": 3,
-  "fatorCubagem": 300
+  "subtotalLiquido": 1500,
+  "quantidadeVolumes": 3
 }
 ```
 

@@ -494,10 +494,8 @@ public class FreteService
         var baseFrete = Math.Max(regra.PrecoCorrigido + CalcularAdicionalPeso(regra, entrada.PesoConsideradoKg), regra.FreteMinimoCorrigido);
         var valorAdValorem = entrada.ValorBaseAdValorem * regra.PercentualSobreTotalNf / 100m;
         var valorOutrasTaxas = entrada.ValorBaseAdValorem * regra.OutraTaxaPercentualNf / 100m;
-        var usaPercentualSobrePedido = regra.PercentualSobreTotalNf > 0 || regra.OutraTaxaPercentualNf > 0;
-        var valorFrete = usaPercentualSobrePedido
-            ? Math.Max(valorAdValorem + valorOutrasTaxas, regra.FreteMinimoCorrigido)
-            : baseFrete;
+        var percentualPedido = valorAdValorem + valorOutrasTaxas;
+        var valorFrete = Math.Max(baseFrete, percentualPedido);
 
         return new FreteOpcaoDto
         {
@@ -507,8 +505,6 @@ public class FreteService
             CodigoTabelaPreco = regra.CodigoTabelaPreco,
             ValorFrete = Round(valorFrete),
             FreteMinimo = Round(regra.FreteMinimoCorrigido),
-            ValorAdValorem = Round(valorAdValorem),
-            PercentualAdValorem = Round(regra.PercentualSobreTotalNf, 4),
             ValorOutrasTaxas = Round(valorOutrasTaxas),
             PercentualOutrasTaxas = Round(regra.OutraTaxaPercentualNf, 4),
             PesoMaximoKg = Round(regra.KgMaximo),
@@ -520,11 +516,8 @@ public class FreteService
 
     private static FreteEntradaDto CriarEntrada(FreteCotacaoRequest request)
     {
-        var fatorCubagem = request.FatorCubagem <= 0 ? 1m : request.FatorCubagem;
-        var pesoCubado = 0m;
         var pesoConsiderado = request.PesoKg;
         var valorBaseAdValorem = request.SubtotalLiquido
-            ?? request.ValorBaseAdValorem
             ?? request.ValorNota;
 
         return new FreteEntradaDto
@@ -532,9 +525,6 @@ public class FreteService
             CepOrigem = NormalizarCep(request.CepOrigem),
             CepDestino = NormalizarCep(request.CepDestino),
             PesoKg = Round(request.PesoKg),
-            VolumeM3 = Round(request.VolumeM3, 6),
-            FatorCubagem = Round(fatorCubagem),
-            PesoCubadoKg = Round(pesoCubado),
             PesoConsideradoKg = Round(pesoConsiderado),
             ValorNota = Round(request.ValorNota),
             ValorBaseAdValorem = Round(valorBaseAdValorem),
@@ -557,9 +547,6 @@ public class FreteService
 
         if (entrada.ValorNota < 0)
             alertas.Add(new FreteAlertaDto { Codigo = "VALOR_NOTA_INVALIDO", Mensagem = "Valor da nota nao pode ser negativo." });
-
-        if (entrada.ValorBaseAdValorem < 0)
-            alertas.Add(new FreteAlertaDto { Codigo = "VALOR_BASE_AD_VALOREM_INVALIDO", Mensagem = "Valor base do ad valorem nao pode ser negativo." });
 
         return alertas;
     }

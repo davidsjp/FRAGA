@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace FRAGA.DTOs;
 
 public class FreteCotacaoRequest
@@ -7,10 +9,7 @@ public class FreteCotacaoRequest
     public decimal PesoKg { get; set; }
     public decimal ValorNota { get; set; }
     public decimal? SubtotalLiquido { get; set; }
-    public decimal? ValorBaseAdValorem { get; set; }
-    public decimal VolumeM3 { get; set; }
     public int QuantidadeVolumes { get; set; } = 1;
-    public decimal FatorCubagem { get; set; } = 300m;
 }
 
 public class FreteCotacaoResponse
@@ -28,11 +27,9 @@ public class FreteEntradaDto
     public string CepOrigem { get; set; } = string.Empty;
     public string CepDestino { get; set; } = string.Empty;
     public decimal PesoKg { get; set; }
-    public decimal VolumeM3 { get; set; }
-    public decimal FatorCubagem { get; set; }
-    public decimal PesoCubadoKg { get; set; }
     public decimal PesoConsideradoKg { get; set; }
     public decimal ValorNota { get; set; }
+    [JsonIgnore]
     public decimal ValorBaseAdValorem { get; set; }
     public int QuantidadeVolumes { get; set; }
 }
@@ -46,8 +43,6 @@ public class FreteOpcaoDto
     public string CodigoTabelaPreco { get; set; } = string.Empty;
     public decimal ValorFrete { get; set; }
     public decimal FreteMinimo { get; set; }
-    public decimal ValorAdValorem { get; set; }
-    public decimal PercentualAdValorem { get; set; }
     public decimal ValorOutrasTaxas { get; set; }
     public decimal PercentualOutrasTaxas { get; set; }
     public decimal PesoMaximoKg { get; set; }
